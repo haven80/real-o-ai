@@ -1,7 +1,7 @@
 {
   "name": "Real o AI?",
   "short_name": "Real o AI?",
-  "description": "Condividi un video e scopri quanto è probabile che sia generato con l'AI.",
+  "description": "Condividi un video o una foto e scopri quanto è probabile che sia generato con l'AI.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
@@ -22,7 +22,7 @@
       "text": "text",
       "url": "url",
       "files": [
-        { "name": "media", "accept": ["video/*", ".mp4", ".mov", ".webm", ".m4v"] }
+        { "name": "media", "accept": ["video/*", "image/*", ".mp4", ".mov", ".webm", ".m4v", ".jpg", ".jpeg", ".png", ".webp", ".heic"] }
       ]
     }
   }

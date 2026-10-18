@@ -47,25 +47,25 @@
 
       <section class="card">
         <div class="stats">
-          <div class="stat"><span>Fotogramma più sospetto</span><b id="peak">—</b></div>
-          <div class="stat"><span>Fotogrammi analizzati</span><b id="frames">—</b></div>
-          <div class="stat"><span>Un fotogramma ogni</span><b id="interval">—</b></div>
+          <div class="stat" id="statPeak"><span>Fotogramma più sospetto</span><b id="peak">—</b></div>
+          <div class="stat"><span id="framesLabel">Fotogrammi analizzati</span><b id="frames">—</b></div>
+          <div class="stat" id="statInterval"><span>Un fotogramma ogni</span><b id="interval">—</b></div>
           <div class="stat"><span>Operazioni usate</span><b id="ops">—</b></div>
         </div>
       </section>
 
-      <section class="card">
+      <section class="card" id="chartCard">
         <div class="chart-title"><h2>Punteggio nel tempo</h2><span>linea tratteggiata = 50%</span></div>
         <svg id="chart" role="img" aria-label="Punteggio AI per ogni fotogramma"></svg>
       </section>
 
       <section class="card disclaimer">
-        <p><b>Come leggerlo.</b> Il numero grande è la media dei fotogrammi analizzati da Sightengine: sopra il 70% il video ha caratteristiche tipiche dei generatori (Sora, Veo, Kling, Runway…), sotto il 30% sembra una ripresa reale.</p>
-        <p>Il modello cerca video <i>interamente</i> generati: un video vero con un volto sostituito (deepfake) può risultare "reale". È una stima, non una prova.</p>
+        <p><b>Come leggerlo.</b> Per i video il numero grande è la media dei fotogrammi analizzati da Sightengine. Sopra il 70% il contenuto ha caratteristiche tipiche dei generatori AI, sotto il 30% sembra una ripresa reale.</p>
+        <p>Il modello cerca contenuti <i>interamente</i> generati: un video vero con un volto sostituito (deepfake) può risultare "reale". È una stima, non una prova.</p>
       </section>
 
       <div class="row">
-        <a class="btn ghost" href="./" style="text-align:center;text-decoration:none">Nuovo video</a>
+        <a class="btn ghost" href="./" style="text-align:center;text-decoration:none">Nuova analisi</a>
         <button class="btn" id="share" type="button">Condividi</button>
       </div>
     </div>

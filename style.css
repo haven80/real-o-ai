@@ -107,7 +107,7 @@ h1 em { font-style: normal; color: var(--accent); }
   align-items: center;
 }
 .picked.show { display: flex; }
-.picked video {
+.picked video, .picked img {
   width: 84px; height: 84px;
   object-fit: cover;
   border-radius: 12px;
@@ -289,3 +289,5 @@ footer a { color: inherit; }
 
 .row { display: flex; gap: 10px; }
 .row .btn { margin-top: 0; }
+
+[hidden] { display: none !important; }

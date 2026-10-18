@@ -15,13 +15,18 @@
  *
  * Endpoint:
  *   GET  /          → stato
- *   POST /analyze   → multipart/form-data con campo "media" (file video)
+ *   POST /analyze   → multipart/form-data con campo "media" (file video o immagine)
  *                     oppure campo "url" (link DIRETTO a un file video)
+ *                     oppure più campi "frame" (fotogrammi JPEG estratti dal browser,
+ *                     + "interval" e "name"): funziona anche con il piano gratuito.
  *                     Codice di accesso: header "X-Access-Token" o campo "token".
  */
 
 const SE_SYNC_URL = "https://api.sightengine.com/1.0/video/check-sync.json";
+const SE_IMAGE_URL = "https://api.sightengine.com/1.0/check.json";
 const VALID_INTERVALS = ["0.5", "1", "2", "3", "4", "5"];
+const MAX_FRAMES = 60;
+const IMAGE_CONCURRENCY = 3;
 
 export default {
   async fetch(request, env) {
@@ -34,7 +39,7 @@ export default {
     const { pathname } = new URL(request.url);
 
     if (request.method === "GET" && (pathname === "/" || pathname === "")) {
-      return json({ ok: true, service: "real-o-ai", configured: Boolean(env.SE_API_USER && env.SE_API_SECRET) }, 200, cors);
+      return json({ ok: true, service: "real-o-ai", version: 2, images: true, configured: Boolean(env.SE_API_USER && env.SE_API_SECRET) }, 200, cors);
     }
 
     if (request.method !== "POST" || pathname !== "/analyze") {
@@ -62,7 +67,23 @@ export default {
 
     const media = form.get("media");
     const url = (form.get("url") || "").toString().trim();
-    const hasFile = media && typeof media === "object" && "arrayBuffer" in media && media.size > 0;
+    const hasFile = isFile(media);
+    const frameFiles = form.getAll("frame").filter(isFile).slice(0, MAX_FRAMES);
+    const isImage = hasFile && String(media.type || "").startsWith("image/");
+
+    // Modalità immagini (piano gratuito): fotogrammi estratti dal browser, o una singola immagine.
+    if (frameFiles.length || isImage) {
+      const images = frameFiles.length ? frameFiles : [media];
+      const step = Number(form.get("interval")) || 2;
+      const name = String(form.get("name") || (hasFile ? media.name : "") || "immagine").slice(0, 80);
+      let se;
+      try {
+        se = await analyzeImages(images, env, step);
+      } catch (e) {
+        return json({ ok: false, error: `Sightengine: ${e.message}`, code: e.code ?? null }, 502, cors);
+      }
+      return respond(summarize(se, { name, interval: frameFiles.length ? step : 0 }), env, cors);
+    }
 
     if (!hasFile && !url) {
       return json({ ok: false, error: "Nessun video ricevuto. Invia un file nel campo \"media\"." }, 400, cors);
@@ -108,22 +129,54 @@ export default {
       return json({ ok: false, error: `Sightengine: ${msg}`, code: se.error?.code ?? null }, 502, cors);
     }
 
-    const result = summarize(se, { name, interval: Number(interval) });
-    const d = encodeResult(result);
-    const site = (env.SITE_URL || "").replace(/\/?$/, "/");
-
-    return json(
-      {
-        ok: true,
-        ...result,
-        d,
-        resultUrl: env.SITE_URL ? `${site}result.html#d=${d}` : null,
-      },
-      200,
-      cors,
-    );
+    return respond(summarize(se, { name, interval: Number(interval) }), env, cors);
   },
 };
+
+function respond(result, env, cors) {
+  const d = encodeResult(result);
+  const site = (env.SITE_URL || "").replace(/\/?$/, "/");
+  return json({ ok: true, ...result, d, resultUrl: env.SITE_URL ? `${site}result.html#d=${d}` : null }, 200, cors);
+}
+
+/**
+ * Analizza una o più immagini con il modello genai per immagini (incluso nel piano gratuito).
+ * Restituisce un oggetto con la stessa forma della risposta video, così il resto del codice non cambia.
+ */
+async function analyzeImages(images, env, step) {
+  const results = new Array(images.length);
+  let next = 0;
+  async function worker() {
+    while (next < images.length) {
+      const i = next++;
+      const f = new FormData();
+      f.append("media", images[i], images[i].name || `frame-${i}.jpg`);
+      f.append("models", "genai");
+      f.append("api_user", env.SE_API_USER);
+      f.append("api_secret", env.SE_API_SECRET);
+      const res = await fetch(SE_IMAGE_URL, { method: "POST", body: f });
+      const body = await res.json().catch(() => ({}));
+      if (body.status !== "success") {
+        const err = new Error(body.error?.message || "risposta non valida");
+        err.code = body.error?.code;
+        throw err;
+      }
+      results[i] = body;
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(IMAGE_CONCURRENCY, images.length) }, worker));
+  return {
+    status: "success",
+    request: { operations: results.reduce((n, r) => n + (r.request?.operations ?? 1), 0) },
+    data: {
+      frames: results.map((r, i) => ({ info: { position: i * step }, type: { ai_generated: r.type?.ai_generated ?? 0 } })),
+    },
+  };
+}
+
+function isFile(v) {
+  return v && typeof v === "object" && "arrayBuffer" in v && v.size > 0;
+}
 
 /** Riduce la risposta Sightengine a un riepilogo compatto. */
 export function summarize(se, { name, interval }) {

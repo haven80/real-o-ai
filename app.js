@@ -1,23 +1,26 @@
 (() => {
-  const MAX_SECONDS = 60; // limite dell'analisi sincrona di Sightengine
-  const MAX_BYTES = 95 * 1024 * 1024; // limite di upload dei Worker Cloudflare (piano gratuito: 100 MB)
   const TOKEN_KEY = "realoai.token";
   const HISTORY_KEY = "realoai.history";
 
   const cfg = window.APP_CONFIG || {};
   const WORKER = (cfg.WORKER_URL || "").replace(/\/+$/, "");
   const configured = WORKER && !/TUO-ACCOUNT/.test(WORKER);
+  // Fotogrammi estratti da ogni video. Ogni immagine costa 5 operazioni Sightengine.
+  const FRAMES = Math.min(20, Math.max(1, Number(cfg.FRAMES) || 6));
+  const FRAME_MAX_SIDE = 1280;
+  const IMAGE_MAX_SIDE = 2048;
+  const JPEG_QUALITY = 0.88;
 
   const $ = (id) => document.getElementById(id);
   const el = {
-    setupWarn: $("setupWarn"), notice: $("notice"), drop: $("drop"), file: $("file"),
-    picked: $("picked"), preview: $("preview"), pickedName: $("pickedName"), pickedInfo: $("pickedInfo"),
-    change: $("change"), go: $("go"), pickCard: $("pickCard"), status: $("status"),
+    setupWarn: $("setupWarn"), notice: $("notice"), drop: $("drop"), file: $("file"), dropHint: $("dropHint"),
+    picked: $("picked"), preview: $("preview"), previewImg: $("previewImg"), pickedName: $("pickedName"),
+    pickedInfo: $("pickedInfo"), change: $("change"), go: $("go"), pickCard: $("pickCard"), status: $("status"),
     statusText: $("statusText"), timer: $("timer"), token: $("token"), tokenSaved: $("tokenSaved"),
     settings: $("settings"), recent: $("recent"), recentCard: $("recentCard"),
   };
 
-  let current = null; // { file?: File, url?: string, duration?: number }
+  let current = null; // { file: File, kind: "video" | "image", duration?: number }
   let previewUrl = null;
 
   // ---------- storage sicuro ----------
@@ -28,6 +31,7 @@
 
   // ---------- avvio ----------
   if (!configured) el.setupWarn.classList.add("show");
+  el.dropHint.textContent = `Video di qualsiasi durata o foto · da un video analizzo ${FRAMES} fotogrammi`;
 
   el.token.value = store.get(TOKEN_KEY) || "";
   let saveTimer;
@@ -49,6 +53,7 @@
   el.file.addEventListener("change", () => {
     const f = el.file.files && el.file.files[0];
     if (f) pickFile(f);
+    el.file.value = "";
   });
   el.change.addEventListener("click", () => el.file.click());
 
@@ -63,42 +68,147 @@
 
   el.go.addEventListener("click", () => current && analyze());
 
+  function kindOf(file) {
+    const t = (file.type || "").toLowerCase();
+    if (t.startsWith("video/")) return "video";
+    if (t.startsWith("image/")) return "image";
+    const ext = (file.name || "").toLowerCase().split(".").pop();
+    if (["mp4", "mov", "webm", "m4v", "mkv", "3gp"].includes(ext)) return "video";
+    if (["jpg", "jpeg", "png", "webp", "gif", "heic", "heif", "avif", "bmp"].includes(ext)) return "image";
+    return null;
+  }
+
   async function pickFile(file, { autostart = false } = {}) {
     hideNotice();
-    if (file.type && !file.type.startsWith("video/")) {
-      return showNotice("error", "Questo non è un video", "Scegli un file video (MP4, MOV o WebM).");
+    const kind = kindOf(file);
+    if (!kind) {
+      return showNotice("error", "Formato non supportato", "Scegli un video (MP4, MOV, WebM) o una foto (JPG, PNG, WebP, HEIC).");
     }
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     previewUrl = URL.createObjectURL(file);
-    el.preview.src = previewUrl;
-    el.pickedName.textContent = file.name || "video";
+
+    el.preview.hidden = kind !== "video";
+    el.previewImg.hidden = kind !== "image";
+    if (kind === "video") {
+      el.previewImg.removeAttribute("src");
+      el.preview.src = previewUrl;
+    } else {
+      el.preview.removeAttribute("src");
+      el.preview.load();
+      el.previewImg.src = previewUrl;
+    }
+
+    el.pickedName.textContent = file.name || (kind === "video" ? "video" : "immagine");
     el.pickedInfo.textContent = formatBytes(file.size);
     el.drop.style.display = "none";
     el.picked.classList.add("show");
-    current = { file };
+    current = { file, kind };
     el.go.disabled = true;
 
-    const duration = await readDuration(el.preview);
-    current.duration = duration;
-    el.pickedInfo.textContent = [duration ? formatDuration(duration) : null, formatBytes(file.size)].filter(Boolean).join(" · ");
+    if (kind === "video") {
+      const duration = await readDuration(el.preview);
+      current.duration = duration;
+      el.pickedInfo.textContent = [duration ? formatDuration(duration) : null, formatBytes(file.size), `${FRAMES} fotogrammi`]
+        .filter(Boolean).join(" · ");
+      if (!duration) {
+        return showNotice("error", "Video non leggibile", "Il browser non riesce ad aprire questo video. Prova a esportarlo in MP4 (H.264).");
+      }
+    } else {
+      el.pickedInfo.textContent = `foto · ${formatBytes(file.size)}`;
+    }
 
-    if (file.size > MAX_BYTES) {
-      return showNotice("error", "Video troppo pesante", `Il limite è circa ${formatBytes(MAX_BYTES)}. Accorcialo o riducine la qualità.`);
-    }
-    if (duration && duration > MAX_SECONDS + 0.5) {
-      return showNotice("error", "Video troppo lungo", `Dura ${formatDuration(duration)}: l'analisi rapida accetta video fino a 1 minuto. Taglia il pezzo che ti interessa e riprova.`);
-    }
     el.go.disabled = !configured;
     if (autostart && configured) analyze();
   }
 
   function readDuration(video) {
     return new Promise((resolve) => {
-      const done = () => resolve(Number.isFinite(video.duration) ? video.duration : null);
+      const done = () => resolve(Number.isFinite(video.duration) && video.duration > 0 ? video.duration : null);
       if (video.readyState >= 1) return done();
       video.addEventListener("loadedmetadata", done, { once: true });
       video.addEventListener("error", () => resolve(null), { once: true });
-      setTimeout(() => resolve(null), 4000);
+      setTimeout(() => resolve(null), 8000);
+    });
+  }
+
+  // ---------- estrazione fotogrammi nel browser ----------
+  async function extractFrames(file, count, onProgress) {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "auto";
+    video.src = url;
+    try {
+      await once(video, "loadeddata", 15000);
+      const duration = video.duration;
+      if (!Number.isFinite(duration) || duration <= 0) throw new Error("durata del video non disponibile");
+
+      const { w, h } = fit(video.videoWidth, video.videoHeight, FRAME_MAX_SIDE);
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+
+      const frames = [];
+      for (let i = 0; i < count; i++) {
+        // fotogrammi distribuiti uniformemente, evitando il primo e l'ultimo istante
+        const t = Math.min(duration - 0.05, (duration * (i + 0.5)) / count);
+        video.currentTime = Math.max(0, t);
+        await once(video, "seeked", 10000);
+        ctx.drawImage(video, 0, 0, w, h);
+        const blob = await toJpeg(canvas);
+        frames.push({ blob, t });
+        onProgress && onProgress(i + 1, count);
+      }
+      return { frames, duration };
+    } finally {
+      video.removeAttribute("src");
+      video.load();
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  async function prepareImage(file) {
+    // Converte in JPEG (gestisce HEIC su iPhone e riduce le foto troppo grandi).
+    const url = URL.createObjectURL(file);
+    try {
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      const { w, h } = fit(img.naturalWidth, img.naturalHeight, IMAGE_MAX_SIDE);
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      return await toJpeg(canvas);
+    } catch {
+      return file; // se il browser non sa decodificarla, la mando così com'è
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  function fit(w, h, max) {
+    const k = Math.min(1, max / Math.max(w || max, h || max));
+    return { w: Math.max(1, Math.round((w || max) * k)), h: Math.max(1, Math.round((h || max) * k)) };
+  }
+  function toJpeg(canvas) {
+    return new Promise((resolve, reject) =>
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("conversione immagine non riuscita"))), "image/jpeg", JPEG_QUALITY));
+  }
+  function once(target, event, timeout) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { cleanup(); reject(new Error(`timeout in attesa di ${event}`)); }, timeout);
+      const ok = () => { cleanup(); resolve(); };
+      const ko = () => { cleanup(); reject(new Error("il browser non riesce a leggere il video")); };
+      function cleanup() {
+        clearTimeout(timer);
+        target.removeEventListener(event, ok);
+        target.removeEventListener("error", ko);
+      }
+      target.addEventListener(event, ok, { once: true });
+      target.addEventListener("error", ko, { once: true });
     });
   }
 
@@ -110,7 +220,7 @@
     history.replaceState(null, "", "./");
 
     if (shared === "error") {
-      return showNotice("error", "Condivisione non riuscita", "Non sono riuscito a ricevere il video. Prova a sceglierlo da qui.");
+      return showNotice("error", "Condivisione non riuscita", "Non sono riuscito a ricevere il file. Prova a sceglierlo da qui.");
     }
 
     try {
@@ -127,53 +237,50 @@
         const file = new File([blob], meta.name || "video.mp4", { type: meta.type || blob.type || "video/mp4" });
         return pickFile(file, { autostart: true });
       }
-
-      const link = meta.url || (meta.text.match(/https?:\/\/\S+/) || [])[0] || "";
-      if (link && /\.(mp4|mov|webm|m4v)(\?|$)/i.test(link)) {
-        current = { url: link };
-        el.drop.style.display = "none";
-        el.picked.classList.add("show");
-        el.preview.removeAttribute("src");
-        el.pickedName.textContent = link.split("/").pop().split("?")[0];
-        el.pickedInfo.textContent = "link diretto";
-        el.go.disabled = !configured;
-        return;
-      }
-      showNotice("warn", "Hai condiviso un link, non il video",
+      showNotice("warn", "Hai condiviso un link, non il file",
         "TikTok, Instagram e YouTube inviano solo l'indirizzo della pagina. Salva il video sul telefono, poi condividi il file da Galleria o File.");
     } catch {
-      showNotice("error", "Condivisione non riuscita", "Prova a scegliere il video da qui.");
+      showNotice("error", "Condivisione non riuscita", "Prova a scegliere il file da qui.");
     }
   }
 
   // ---------- analisi ----------
   async function analyze() {
-    if (!configured) return;
+    if (!configured || !current) return;
     hideNotice();
     setBusy(true);
 
-    const form = new FormData();
-    if (current.file) form.append("media", current.file, current.file.name || "video.mp4");
-    else form.append("url", current.url);
-
-    const headers = {};
-    const token = (store.get(TOKEN_KEY) || el.token.value || "").trim();
-    if (token) headers["X-Access-Token"] = token;
-
     const started = Date.now();
-    const messages = [
-      [0, "Invio del video…"],
-      [4, "Estrazione dei fotogrammi…"],
-      [9, "Analisi dei fotogrammi con il modello genai…"],
-      [25, "Quasi fatto: i video lunghi richiedono più tempo…"],
-    ];
+    let phase = "Preparazione…";
     const tick = setInterval(() => {
-      const s = Math.floor((Date.now() - started) / 1000);
-      el.timer.textContent = `${s} s`;
-      el.statusText.textContent = messages.filter(([t]) => s >= t).pop()[1];
-    }, 500);
+      el.timer.textContent = `${Math.floor((Date.now() - started) / 1000)} s`;
+      el.statusText.textContent = phase;
+    }, 300);
 
     try {
+      const form = new FormData();
+      const baseName = (current.file.name || "file").replace(/\.[^.]+$/, "");
+
+      if (current.kind === "video") {
+        phase = "Estrazione dei fotogrammi…";
+        const { frames, duration } = await extractFrames(current.file, FRAMES, (n, tot) => {
+          phase = `Estrazione dei fotogrammi ${n}/${tot}…`;
+        });
+        frames.forEach((f, i) => form.append("frame", f.blob, `${baseName}-${i + 1}.jpg`));
+        form.append("interval", String(Math.round((duration / FRAMES) * 10) / 10));
+        form.append("name", current.file.name || "video");
+      } else {
+        phase = "Preparazione dell'immagine…";
+        const jpeg = await prepareImage(current.file);
+        form.append("media", jpeg, jpeg === current.file ? current.file.name : `${baseName}.jpg`);
+        form.append("name", current.file.name || "immagine");
+      }
+
+      phase = current.kind === "video" ? `Analisi di ${FRAMES} fotogrammi…` : "Analisi dell'immagine…";
+      const headers = {};
+      const token = (store.get(TOKEN_KEY) || el.token.value || "").trim();
+      if (token) headers["X-Access-Token"] = token;
+
       const res = await fetch(`${WORKER}/analyze`, { method: "POST", body: form, headers });
       let data;
       try { data = await res.json(); } catch { data = { ok: false, error: `Risposta non valida dal Worker (HTTP ${res.status}).` }; }
@@ -226,7 +333,7 @@
       pill.textContent = `${Math.round(it.a * 100)}%`;
       const nm = document.createElement("span");
       nm.className = "nm";
-      nm.textContent = it.n || "video";
+      nm.textContent = it.n || "file";
       const when = document.createElement("span");
       when.className = "when";
       when.textContent = new Date(it.t).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit" });

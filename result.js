@@ -33,15 +33,24 @@
   }
 
   $("peak").textContent = `${Math.round(peak * 100)}%`;
-  $("frames").textContent = (data.f || []).length || "—";
+  const nFrames = (data.f || []).length;
+  const single = nFrames <= 1;
+  $("frames").textContent = nFrames || "—";
   $("interval").textContent = data.i ? `${String(data.i).replace(".", ",")} s` : "—";
+  if (single) {
+    $("chartCard").hidden = true;
+    $("statPeak").hidden = true;
+    $("statInterval").hidden = true;
+    $("framesLabel").textContent = "Tipo";
+    $("frames").textContent = "immagine";
+  }
   $("ops").textContent = data.o ?? "—";
 
   drawChart($("chart"), data.f || [], data.i || 1);
 
   $("share").addEventListener("click", async () => {
     const url = location.href;
-    const text = `${v.label}: ${Math.round(score * 100)}% di probabilità che il video sia generato con l'AI.`;
+    const text = `${v.label}: ${Math.round(score * 100)}% di probabilità che sia generato con l'AI.`;
     try {
       if (navigator.share) {
         await navigator.share({ title: "Real o AI?", text, url });
@@ -68,7 +77,7 @@
   }
 
   function verdict(s) {
-    if (s >= 0.7) return { label: "Probabilmente AI", sub: "Il video ha forti segnali di generazione artificiale.", cssVar: "--ai" };
+    if (s >= 0.7) return { label: "Probabilmente AI", sub: "Forti segnali di generazione artificiale.", cssVar: "--ai" };
     if (s >= 0.3) return { label: "Incerto", sub: "Segnali contrastanti: guarda il grafico e valuta con prudenza.", cssVar: "--unsure" };
     return { label: "Probabilmente reale", sub: "Nessun segnale forte di generazione artificiale.", cssVar: "--real" };
   }

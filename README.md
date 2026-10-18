@@ -1,6 +1,6 @@
 # Real o AI?
 
-Condividi un video dal telefono e scopri quanto è probabile che sia generato con l'intelligenza artificiale. Il punteggio arriva dal modello `genai` di [Sightengine](https://sightengine.com/docs/ai-generated-video-detection).
+Condividi un video o una foto dal telefono e scopri quanto è probabile che sia generato con l'intelligenza artificiale. Il punteggio arriva dal modello `genai` di [Sightengine](https://sightengine.com/docs/ai-generated-video-detection).
 
 ```
 Telefono ──video──▶ Worker Cloudflare (custodisce le chiavi) ──▶ Sightengine
@@ -11,9 +11,9 @@ Telefono ──video──▶ Worker Cloudflare (custodisce le chiavi) ──▶
 - **Sito** (questa cartella): pagine statiche su GitHub Pages, installabile come app.
 - **Worker** (`worker/`): piccolo proxy gratuito su Cloudflare. Tiene nascoste le chiavi Sightengine e blocca chi non ha il tuo codice di accesso.
 - **Android**: il sito installato compare nel menu *Condividi*.
-- **iPhone**: un Comando Rapido invia il video e apre la pagina risultato.
+- **iPhone**: il sito aggiunto alla schermata Home; per le foto anche un Comando Rapido.
 
-Limiti: video **fino a 1 minuto**, circa 95 MB. Con 1 fotogramma ogni 2 secondi, un video di 30 s consuma **circa 15 operazioni** Sightengine.
+**Come funziona col piano gratuito.** Sightengine non include l'analisi video nel piano gratuito, quindi il browser estrae **6 fotogrammi** distribuiti sul video e li manda come immagini. Ogni immagine costa **5 operazioni**: un video = 30 operazioni, una foto = 5. Con le 2.000 operazioni gratuite al mese (max 500 al giorno) sono circa **66 video al mese, 16 al giorno**. Il numero di fotogrammi si cambia con `FRAMES` in `config.js`. I video possono avere qualsiasi durata.
 
 ---
 
@@ -21,7 +21,7 @@ Limiti: video **fino a 1 minuto**, circa 95 MB. Con 1 fotogramma ogni 2 secondi,
 
 1. Crea un account su <https://dashboard.sightengine.com/signup>.
 2. Nel pannello, sezione **API keys**, copia `api_user` e `api_secret`.
-3. Prima di proseguire controlla nel pannello che il tuo piano includa l'analisi **video** (alcune fonti indicano che il piano gratuito potrebbe non includerla).
+3. Il piano gratuito basta: il sito usa il rilevatore di immagini. L'analisi video nativa richiede un piano a pagamento.
 
 ## 2. Worker Cloudflare (senza installare nulla)
 
@@ -65,30 +65,27 @@ La cartella `worker/` pubblicata sul sito non contiene segreti: le chiavi esisto
 
 Se l'app non compare subito nel menu Condividi, apri il sito una volta dall'icona installata e riprova.
 
-## 5. iPhone: Comando Rapido
+## 5. iPhone
 
-Le web app su iPhone non possono ricevere contenuti condivisi, quindi si usa un Comando Rapido che parla direttamente con il Worker.
+Le web app su iPhone non possono ricevere contenuti dal menu *Condividi*, quindi:
 
-1. Apri **Comandi Rapidi** → **+** → chiamalo **Real o AI?**
-2. Tocca l'icona **ⓘ** in basso → attiva **Mostra nel foglio di condivisione**. In *Ricevi*, lascia solo **Contenuti multimediali** (o *Video*).
-3. Aggiungi le azioni, in quest'ordine:
+1. Apri il sito in **Safari** → **Condividi → Aggiungi alla schermata Home**.
+2. Apri l'icona, inserisci il codice di accesso una volta.
+3. Tocca **Scegli un video o una foto** e prendilo dalla libreria.
 
-   1. **Ottieni contenuti dell'URL**
-      - URL: `https://real-o-ai.TUO-ACCOUNT.workers.dev/analyze`
-      - Mostra altro → **Metodo**: `POST`
-      - **Intestazioni**: chiave `X-Access-Token`, valore = il tuo `ACCESS_TOKEN`
-      - **Corpo richiesta**: `Modulo` → aggiungi campo di tipo **File**, chiave `media`, valore = variabile **Input comando rapido**
-   2. **Ottieni valore dizionario** → chiave `resultUrl` in *Contenuti dell'URL*
-   3. **Se** *Valore dizionario* **ha un valore**
-      - **Apri URL** → *Valore dizionario*
-   4. **Altrimenti**
-      - **Ottieni valore dizionario** → chiave `error` in *Contenuti dell'URL*
-      - **Mostra risultato** → *Valore dizionario*
-   5. **Fine Se**
+**Comando Rapido (solo foto).** Con il piano gratuito di Sightengine il Worker accetta solo immagini, e i Comandi Rapidi non sanno estrarre i fotogrammi da un video. Per le foto puoi però creare un comando da usare dal menu *Condividi*:
 
-4. Usalo da **Foto** (o da qualsiasi app che condivide un video): *Condividi* → **Real o AI?** Dopo qualche secondo Safari apre la pagina con il punteggio.
+1. **Comandi Rapidi** → **+** → chiamalo **Real o AI?** → **ⓘ** → attiva **Mostra nel foglio di condivisione**, in *Ricevi* lascia solo **Immagini**.
+2. Azioni, in ordine:
+   1. **Converti immagine** → in **JPEG**
+   2. **Ottieni contenuti dell'URL**
+      - URL: indirizzo del tuo Worker + `/analyze`
+      - **Metodo** `POST` · **Intestazioni**: `X-Access-Token` = il tuo `ACCESS_TOKEN`
+      - **Corpo richiesta** `Modulo` → campo **File**, chiave `media`, valore = *Immagine convertita*
+   3. **Ottieni valore dizionario** → chiave `resultUrl`
+   4. **Se** *Valore dizionario* **ha un valore** → **Apri URL**; **Altrimenti** → **Ottieni valore dizionario** chiave `error` → **Mostra risultato**; **Fine Se**
 
-Suggerimento: se i video sono pesanti, aggiungi come prima azione **Codifica contenuti multimediali** (dimensione 1280×720) e usa il suo risultato come valore del campo `media`. L'invio sarà più veloce e il risultato non cambia in modo significativo.
+Con un piano Sightengine a pagamento il Worker accetta anche il video intero nel campo `media` (analisi video nativa).
 
 ## Video da TikTok, Instagram, YouTube
 

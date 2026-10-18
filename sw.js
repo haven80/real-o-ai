@@ -1,5 +1,5 @@
-// Service worker: rende il sito installabile e riceve i video condivisi (Android).
-const VERSION = "v1";
+// Service worker: rende il sito installabile e riceve video e foto condivisi (Android).
+const VERSION = "v2";
 const SHELL = `shell-${VERSION}`;
 const SHARED = "shared-media";
 const SHELL_FILES = ["./", "./index.html", "./result.html", "./style.css", "./app.js", "./result.js", "./config.js", "./manifest.webmanifest", "./icons/icon-192.png"];
