@@ -1,0 +1,16 @@
+name = "real-o-ai"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+[vars]
+# Indirizzo del sito su GitHub Pages (con la barra finale)
+SITE_URL = "https://TUO-UTENTE.github.io/real-o-ai/"
+# Solo il tuo sito può chiamare il Worker dal browser
+ALLOWED_ORIGIN = "https://TUO-UTENTE.github.io"
+# 1 fotogramma ogni 2 secondi → ~15 operazioni per 30 s di video
+INTERVAL = "2"
+
+# Le chiavi NON vanno qui. Impostale come secret:
+#   npx wrangler secret put SE_API_USER
+#   npx wrangler secret put SE_API_SECRET
+#   npx wrangler secret put ACCESS_TOKEN

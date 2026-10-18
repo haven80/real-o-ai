@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Real o AI?</title>
+  <meta name="description" content="Condividi un video e scopri quanto è probabile che sia generato con l'intelligenza artificiale.">
+  <meta name="theme-color" content="#0f1115">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Real o AI?">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="wrap">
+    <a class="brand" href="./">
+      <img src="icons/icon-192.png" alt="">
+      <b>Real o AI?</b>
+      <span>sightengine · genai</span>
+    </a>
+
+    <h1>Questo video è <em>vero</em>?</h1>
+    <p class="lead">Carica o condividi un video (fino a 1 minuto): ricevi la probabilità che sia stato generato con l'intelligenza artificiale.</p>
+
+    <div id="setupWarn" class="notice warn">
+      <b>Sito non ancora collegato</b>
+      <p>Inserisci l'indirizzo del tuo Worker Cloudflare in <code>config.js</code>.</p>
+    </div>
+
+    <div id="notice" class="notice"></div>
+
+    <section class="card" id="pickCard">
+      <label class="drop" id="drop">
+        <input type="file" id="file" accept="video/*">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/>
+          <path d="M10 9.2v5.6a.5.5 0 0 0 .76.43l4.5-2.8a.5.5 0 0 0 0-.86l-4.5-2.8a.5.5 0 0 0-.76.43Z"/>
+        </svg>
+        <strong>Scegli un video</strong>
+        <small>MP4, MOV o WebM · massimo 60 secondi</small>
+      </label>
+
+      <div class="picked" id="picked">
+        <video id="preview" muted playsinline preload="metadata"></video>
+        <div class="meta">
+          <b id="pickedName">video.mp4</b>
+          <span id="pickedInfo">—</span><br>
+          <button class="linkbtn" id="change" type="button">Cambia video</button>
+        </div>
+      </div>
+
+      <button class="btn" id="go" type="button" disabled>Analizza</button>
+    </section>
+
+    <section class="card status" id="status" aria-live="polite">
+      <p id="statusText">Invio del video…</p>
+      <div class="bar"></div>
+      <p class="timer" id="timer" style="margin:10px 0 0">0 s</p>
+    </section>
+
+    <section class="card" id="recentCard" hidden>
+      <div class="chart-title"><h2>Analisi recenti</h2><span>su questo dispositivo</span></div>
+      <ul class="recent" id="recent"></ul>
+    </section>
+
+    <details class="card" id="settings">
+      <summary>Codice di accesso</summary>
+      <div class="body">
+        <p>Il codice che hai impostato nel Worker (ACCESS_TOKEN). Resta salvato solo su questo dispositivo.</p>
+        <label class="field" for="token">Codice</label>
+        <input class="text" id="token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <div class="saved" id="tokenSaved"></div>
+      </div>
+    </details>
+
+    <details class="card" id="howto">
+      <summary>Come condividere un video qui</summary>
+      <div class="body">
+        <p><b>Android</b></p>
+        <ol>
+          <li>Apri questo sito in Chrome e tocca <i>⋮ → Installa app</i> (o <i>Aggiungi a schermata Home</i>).</li>
+          <li>Dalla Galleria, o da un'app dove hai salvato il video, tocca <i>Condividi → Real o AI?</i></li>
+        </ol>
+        <p><b>iPhone</b></p>
+        <ol>
+          <li>Crea il Comando Rapido <i>Real o AI?</i> (istruzioni nel README del progetto).</li>
+          <li>Da Foto o da Condividi di un'app, scegli <i>Real o AI?</i>: si apre direttamente la pagina con il punteggio.</li>
+        </ol>
+        <p>Da TikTok, Instagram e YouTube la condivisione invia solo il link alla pagina, non il video: prima salva il video, poi condividi il file.</p>
+      </div>
+    </details>
+
+    <footer>
+      Il punteggio è una stima statistica, non una prova. <br>
+      Analisi di Sightengine · i video non vengono conservati da questo sito.
+    </footer>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
